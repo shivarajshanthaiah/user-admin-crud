@@ -86,6 +86,7 @@ func setTokenCookie(c *gin.Context, token string) {
 }
 
 // Function to clear JWT token cookie
+
 func clearCookie(c *gin.Context) {
 	cookie := http.Cookie{
 		Name:     "jwtToken", // Cookie name
@@ -97,25 +98,24 @@ func clearCookie(c *gin.Context) {
 	http.SetCookie(c.Writer, &cookie)
 }
 
-	// 	// Setting JWT token cookie and redirecting to home page
-	// 	cookie := http.Cookie{
-	// 		Name:     "jwtToken", // Cookie name
-	// 		Value:    token,      // JWT token value
-	// 		Path:     "/",        // Cookie path (root)
-	// 		HttpOnly: true,       // The cookie is accessible only through HTTP
-	// 		Secure:   false,      // Set to true in production for HTTPS
-	// 		SameSite: http.SameSiteStrictMode,
-	// 		MaxAge:   36000, //seconds
-	// 	}
-	// 	http.SetCookie(c.Writer, &cookie)
+// 	// Setting JWT token cookie and redirecting to home page
+// 	cookie := http.Cookie{
+// 		Name:     "jwtToken", // Cookie name
+// 		Value:    token,      // JWT token value
+// 		Path:     "/",        // Cookie path (root)
+// 		HttpOnly: true,       // The cookie is accessible only through HTTP
+// 		Secure:   false,      // Set to true in production for HTTPS
+// 		SameSite: http.SameSiteStrictMode,
+// 		MaxAge:   36000, //seconds
+// 	}
+// 	http.SetCookie(c.Writer, &cookie)
 
-	// 	c.Redirect(http.StatusSeeOther, "/pr/home")
-	// } else {
-	// 	c.HTML(http.StatusBadRequest, "login.html", gin.H{
-	// 		"error": "Invalid credentials",
-	// 	})
-	// }
-
+// 	c.Redirect(http.StatusSeeOther, "/pr/home")
+// } else {
+// 	c.HTML(http.StatusBadRequest, "login.html", gin.H{
+// 		"error": "Invalid credentials",
+// 	})
+// }
 
 // POST requests to process user signup
 func SignupForm(c *gin.Context) {
@@ -128,7 +128,7 @@ func SignupForm(c *gin.Context) {
 	c_password := c.PostForm("c_password")
 
 	// Form validation for username
-	usernameRegex := regexp.MustCompile(`^[a-zA-Z]+$`)
+	usernameRegex := regexp.MustCompile(`^[a-zA-Z\s]+$`)
 	if !usernameRegex.MatchString(user.Username) {
 		c.HTML(http.StatusBadRequest, "signup.html", gin.H{"error": "Username should only contain letters"})
 		return
@@ -188,28 +188,36 @@ func HomePage(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/au/login")
 		return
 	}
-
 	data, exists := c.Get("email")
 	if !exists {
-		// Handle the case where the email data doesn't exist in the context
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"message": "Email data not found in context",
-		})
+		c.Redirect(http.StatusSeeOther, "/au/login")
 		return
 	}
 
 	user, ok := data.(string)
 	if !ok {
-		// Handle the case where the email data is not a string
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"message": "Invalid email data type in context",
-		})
+		c.Redirect(http.StatusSeeOther, "/au/login")
+		return
+	}
+
+	// Check if the user's data exists in the database
+	if !isUserDataValid(user) {
+		c.Redirect(http.StatusSeeOther, "/au/login")
 		return
 	}
 
 	c.HTML(http.StatusOK, "home.html", gin.H{
 		"email": user,
 	})
+}
+
+// Check if the user's data exists in the database
+func isUserDataValid(email string) bool {
+	var user models.Credentials
+	if err := configuration.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		return false
+	}
+	return true
 }
 
 func Logout(c *gin.Context) {
@@ -300,8 +308,8 @@ func AdminLogout(c *gin.Context) {
 func AddNewUser(c *gin.Context) {
 	var user models.Credentials
 
-	user.Username = c.PostForm("name")
-	user.Email = c.PostForm("email")
+	user.Username = strings.TrimSpace(c.PostForm("name"))
+	user.Email = strings.TrimSpace(c.PostForm("email"))
 	password := c.PostForm("password")
 
 	if !isValidUsername(user.Username) {
@@ -340,7 +348,7 @@ func AddNewUser(c *gin.Context) {
 
 func isValidUsername(username string) bool {
 	// Username should contain only letters and should be between 4 and 20 characters
-	regex := regexp.MustCompile("^[a-zA-Z]{4,20}$")
+	regex := regexp.MustCompile(`^[a-zA-Z\s]{4,20}$`)
 	return regex.MatchString(username)
 }
 
@@ -364,7 +372,6 @@ func SearchUser(c *gin.Context) {
 		})
 
 	}
-
 }
 
 // POST request to edit user details based on the provided user ID
@@ -399,6 +406,7 @@ func DeleteUser(c *gin.Context) {
 	if user.Email == getEmailFromContext(c) {
 		c.SetCookie("jwtToken", "", -1, "/", "", false, true)
 		c.Redirect(http.StatusSeeOther, "/au/login")
+		return
 	}
 	configuration.DB.Delete(&user)
 	c.Redirect(http.StatusSeeOther, "/su/admin-panel")
@@ -407,7 +415,9 @@ func DeleteUser(c *gin.Context) {
 // Get the email from the context
 func getEmailFromContext(c *gin.Context) string {
 	if data, ok := c.Get("email"); ok {
-		return data.(string)
+		if email, ok := data.(string); ok {
+			return email
+		}
 	}
 	return ""
 }
