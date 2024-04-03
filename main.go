@@ -18,4 +18,5 @@ func main() {
 
 	routes.RoutesConfig(r,configuration.DB)
 	r.Run("localhost:7000")
+
 }
