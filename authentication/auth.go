@@ -20,7 +20,7 @@ func Authenticate() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
+		
 		// Parse and validate JWT token.
 		useremail, err := ParseToken(token)
 		if err != nil || useremail == "" {
